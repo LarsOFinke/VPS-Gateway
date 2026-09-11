@@ -56,6 +56,10 @@ gateway_load_runtime_config() {
     echo '[gateway] GATEWAY_API_TOKEN must contain at least 32 non-placeholder characters.' >&2
     return 1
   }
+  [[ "${GATEWAY_ADMIN_PASSWORD_HASH:-}" == pbkdf2_sha256:* ]] || {
+    echo '[gateway] GATEWAY_ADMIN_PASSWORD_HASH is missing or invalid.' >&2
+    return 1
+  }
   GATEWAY_ROOT_DIR="$root_dir"
   export GATEWAY_ROOT_DIR
 }

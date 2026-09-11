@@ -5,6 +5,10 @@ and/or IPv6 address. NGINX owns public ports 80/443; a loopback-only control API
 turns hostname-route declarations into validated NGINX configuration and reloads it
 without dropping connections.
 
+The same loopback endpoint serves an admin panel for managing projects, testing
+upstream accessibility, switching projects into maintenance mode, reloading the
+gateway, and changing the administrator password.
+
 ## What it owns
 
 - public HTTP/HTTPS and hostname routing;
@@ -29,6 +33,17 @@ ports, Docker networks, volumes, ACME endpoints, and installation roots. Setup
 creates `.env.test` or `.env.production`, generates the API token, and keeps the
 management port on loopback. Review `LETSENCRYPT_EMAIL` before enrolling a
 certificate. Private profiles must remain mode `0600`.
+
+Setup prints a random admin bootstrap password exactly once. Open the panel
+locally on the VPS or through an SSH tunnel and change that password immediately:
+
+```sh
+ssh -L 9080:127.0.0.1:9080 administrator@your-vps
+# Then open http://127.0.0.1:9080/admin/
+```
+
+For the default test target, forward and open port `19080` instead. The panel
+must remain loopback-only; do not publish it through a hostname route.
 
 Remote targets use equally separate origin profiles:
 
@@ -85,6 +100,10 @@ lifecycle between proxy layers.
 
 The operation intentionally leaves a working HTTP route if ACME enrollment
 fails, so DNS can be corrected and the same command retried.
+
+Disabling a project through the panel or API retains ownership of its declared
+hostnames and returns a fixed HTTP 503 maintenance page with `Retry-After: 300`.
+For TLS projects, the existing certificate remains in use.
 
 For CI or custom automation, apply JSON directly:
 

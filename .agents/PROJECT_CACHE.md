@@ -10,6 +10,9 @@
   host ports.
 - Control plane: Python 3 standard-library HTTP API on container port 9080,
   published only to `127.0.0.1`.
+- Admin plane: static browser console on the same loopback endpoint, using
+  password-backed sessions and CSRF protection. It manages route projects,
+  maintenance state, reloads, password rotation, and accessibility checks.
 - State: versioned JSON route declarations in the Compose `gateway-state`
   volume; generated NGINX configuration is ephemeral and rebuilt at startup.
 - TLS: Certbot writes the shared `letsencrypt` and `acme-webroot` volumes.
@@ -59,6 +62,9 @@ Private profiles require mode 0600.
   certificate exists.
 - API automation: `scripts/gatewayctl` selects the same target and calls the
   loopback API with the profile bearer token.
+- Admin setup: `scripts/setup` generates and prints a bootstrap password once;
+  the panel requires rotation before enabling project controls. Only the hash
+  is stored, and later changes persist in the gateway-state volume.
 - Origin deployment: `deploy.sh` and `update.sh` default to test, build a signed,
   checksummed artifact, transfer it over SSH, and invoke the root-owned target
   runner constrained to the selected stage and install root.
@@ -80,6 +86,7 @@ Private profiles require mode 0600.
   internal ingress network isolates the application path from external routing.
 - TLS routes require an unexpired certificate covering every declared domain;
   NGINX then verifies the key and complete candidate configuration.
+- Disabled projects keep their hostnames and serve a fixed 503 maintenance page.
 - The gateway container is read-only, lacks a Docker socket, and retains only the
   CHOWN/SETUID/SETGID capabilities needed for NGINX worker privilege drop.
 - Release artifacts explicitly exclude secrets, caches, and generated output.

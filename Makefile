@@ -8,6 +8,7 @@ test:
 infrastructure-test:
 	bash tests/test_target_selection.sh
 	bash tests/test_setup_network.sh
+	bash tests/test_setup_admin.sh
 	bash tests/test_release_artifact.sh
 	bash tests/test_version_script.sh
 

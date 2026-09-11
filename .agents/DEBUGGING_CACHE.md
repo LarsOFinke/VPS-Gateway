@@ -8,6 +8,9 @@
 | 502/504 | application container, internal ingress network alias, upstream port | central -> application gateway |
 | Redirect or secure-cookie loop | forwarded scheme/port in downstream gateway | trusted proxy contract |
 | Route API 401 | selected target/profile, token mismatch | origin/target profile selection |
+| Admin login fails | bootstrap rotation, password, five-attempt cooldown | admin authentication |
+| Accessibility test fails | alias, container listener, ingress membership | gateway -> upstream |
+| Project returns 503 | project `enabled` state in panel/API | intentional maintenance route |
 | Route API 409 | gateway logs, certificate expiry/SANs, paths, `nginx -t` | render/reload transaction |
 | Route API 422 | request versus `openapi.yaml` | model validation |
 | ACME failure | DNS A/AAAA, port 80, selected staging/production endpoint | public HTTP challenge path |

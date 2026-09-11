@@ -7,6 +7,7 @@ export PYTHONDONTWRITEBYTECODE=1
 PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py' -v
 bash tests/test_target_selection.sh
 bash tests/test_setup_network.sh
+bash tests/test_setup_admin.sh
 bash tests/test_release_artifact.sh
 bash tests/test_version_script.sh
 python3 infrastructure/scripts/quality/check_repository.py

@@ -7,9 +7,11 @@ services:
     restart: unless-stopped
     environment:
       GATEWAY_API_TOKEN: ${GATEWAY_API_TOKEN:?set GATEWAY_API_TOKEN in .env}
+      GATEWAY_ADMIN_PASSWORD_HASH: ${GATEWAY_ADMIN_PASSWORD_HASH:?set GATEWAY_ADMIN_PASSWORD_HASH in .env}
       GATEWAY_API_HOST: 0.0.0.0
       GATEWAY_API_PORT: 9080
       GATEWAY_STATE_FILE: /var/lib/vps-gateway/routes.json
+      GATEWAY_ADMIN_FILE: /var/lib/vps-gateway/admin.json
       GATEWAY_NGINX_FILE: /etc/vps-gateway/routes.conf
       GATEWAY_NGINX_CONFIG: /etc/nginx/nginx.conf
       GATEWAY_CERT_ROOT: /etc/letsencrypt/live

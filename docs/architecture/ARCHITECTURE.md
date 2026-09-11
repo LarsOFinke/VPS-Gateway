@@ -36,8 +36,11 @@ public trust boundary. Unknown HTTP hosts close with 444; unknown TLS hosts get
 
 The standard-library Python API is intentionally small and dependency-free. It
 binds inside the container to port 9080, which Compose exposes only at host
-`127.0.0.1`. Every endpoint except health requires a constant-time bearer-token
-check. It has no Docker socket and executes only fixed NGINX test/reload commands.
+`127.0.0.1`. Automation uses constant-time bearer-token authentication. The
+browser panel uses an HttpOnly SameSite session cookie and CSRF token; its
+PBKDF2-hashed password persists in the state volume. Bootstrap credentials must
+be rotated before the session can manage routes. It has no Docker socket and
+executes only fixed NGINX, certificate, and bounded upstream-check operations.
 
 A mutation is serialized under a process lock, validates every route and
 domain conflict, renders the complete candidate, persists desired state
@@ -48,6 +51,10 @@ persistent state.
 TLS route activation checks that the certificate is unexpired and covers every
 declared hostname before NGINX verifies the matching private key and complete
 configuration.
+
+Disabled routes remain rendered and retain domain ownership. Their HTTP and,
+when configured, HTTPS server blocks return a repository-owned 503 maintenance
+page rather than proxying or falling through to the unknown-host server.
 
 ## Environment isolation
 

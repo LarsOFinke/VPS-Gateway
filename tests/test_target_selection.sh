@@ -28,6 +28,7 @@ trap 'rm -f "$temporary"' EXIT
 cat >"$temporary" <<'EOF'
 GATEWAY_ENVIRONMENT=test
 GATEWAY_API_TOKEN=0123456789abcdef0123456789abcdef
+GATEWAY_ADMIN_PASSWORD_HASH=pbkdf2_sha256:test
 EOF
 chmod 0600 "$temporary"
 gateway_load_runtime_config "$ROOT_DIR" "$temporary" test

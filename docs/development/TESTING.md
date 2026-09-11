@@ -12,6 +12,10 @@ make check-tree           # repository/document/version conventions
 The unit suite also verifies that upstreams are limited to Docker aliases,
 runtime profile symlinks are rejected, and TLS certificates are checked for
 expiry and hostname coverage before route activation.
+Admin coverage includes password hashing and persistence, session revocation,
+forced bootstrap rotation, CSRF rejection, login cooldown, static panel serving,
+and real loopback HTTP route management where sockets are available. Accessibility
+checks and maintenance rendering are tested without external network access.
 
 Run the complete gate for cross-cutting work:
 

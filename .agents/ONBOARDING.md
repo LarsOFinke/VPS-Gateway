@@ -40,6 +40,7 @@ module, direct callers, tests, configuration, and relevant primary documentation
 | --- | --- |
 | Architecture/routing | `.agents/PROJECT_CACHE.md`, `docs/architecture/ARCHITECTURE.md` |
 | Control API | `openapi.yaml`, `src/vps_gateway/app.py`, `models.py` |
+| Admin panel/auth | `src/vps_gateway/static/`, `auth.py`, `checks.py`, `test_api.py` |
 | NGINX rendering | `src/vps_gateway/nginx.py`, `config/nginx.conf` |
 | Test/production setup | `docs/deployment/DEPLOYMENT.md`, `scripts/lib/target.sh` |
 | Remote release | `infrastructure/scripts/release/`, `.env.origin.*.example` |

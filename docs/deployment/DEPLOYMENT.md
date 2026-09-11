@@ -22,6 +22,9 @@ The loaders reject a target/profile mismatch and reject combined target flags.
 `infrastructure/.env.<target>.example`, generates the API token, creates the
 target-specific external Docker-internal network, verifies that an existing
 network is also internal, builds the gateway, and runs its health check.
+When it first initializes admin authentication, setup prints a random bootstrap
+password once. Capture it without recording it in shared deployment logs and
+rotate it immediately in the loopback admin panel.
 Review the email and ports before using `connect-route`.
 
 Test uses non-privileged 18080/18443 host ports and Let's Encrypt staging by

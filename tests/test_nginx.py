@@ -22,6 +22,28 @@ class NginxTest(unittest.TestCase):
         self.assertIn("proxy_set_header X-Forwarded-For $remote_addr;", output)
         self.assertNotIn("listen 8443 ssl", output)
 
+    def test_disabled_route_serves_maintenance_instead_of_disappearing(self):
+        disabled = Route.from_dict(
+            "app",
+            {"domains": ["app.example.net"], "upstream": "http://app-gateway:8080", "enabled": False},
+        )
+        output = render({"app": disabled}, Path("/certs"))
+        self.assertIn("server_name app.example.net;", output)
+        self.assertIn('add_header Retry-After "300" always;', output)
+        self.assertIn("return 503", output)
+        self.assertNotIn("proxy_pass", output)
+
+    def test_disabled_route_keeps_domain_ownership(self):
+        disabled = Route.from_dict(
+            "app",
+            {"domains": ["app.example.net"], "upstream": "http://app-gateway:8080", "enabled": False},
+        )
+        other = Route.from_dict(
+            "other", {"domains": ["app.example.net"], "upstream": "http://other-gateway:8080"}
+        )
+        with self.assertRaisesRegex(ValidationError, "already owned"):
+            render({"app": disabled, "other": other}, Path("/certs"))
+
     def test_tls_requires_certificate_files(self):
         secure = Route.from_dict(
             "app",
