@@ -1,0 +1,150 @@
+openapi: 3.1.0
+info:
+  title: VPS Gateway Control API
+  version: 0.3.0
+  description: Loopback-only API for declarative, transactional VPS ingress routing.
+servers:
+  - url: http://127.0.0.1:9080
+security:
+  - bearerAuth: []
+paths:
+  /v1/health:
+    get:
+      security: []
+      operationId: health
+      responses:
+        '200':
+          description: Control plane is accepting requests.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, version]
+                properties:
+                  status: {type: string, const: ok}
+                  version: {type: string}
+  /v1/routes:
+    get:
+      operationId: listRoutes
+      responses:
+        '200':
+          description: All configured hostname routes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [routes]
+                properties:
+                  routes:
+                    type: array
+                    items: {$ref: '#/components/schemas/Route'}
+  /v1/routes/{routeId}:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+    get:
+      operationId: getRoute
+      responses:
+        '200':
+          description: Hostname routing declaration.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Route'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      operationId: putRoute
+      description: Replaces a route declaration, validates the complete NGINX configuration, and reloads atomically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RouteInput'}
+      responses:
+        '200':
+          description: Existing route updated.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Route'}
+        '201':
+          description: Route created.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Route'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Invalid'}
+    delete:
+      operationId: deleteRoute
+      responses:
+        '204': {description: Route deleted and NGINX reloaded.}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /v1/reload:
+    post:
+      operationId: reloadGateway
+      description: Revalidates routes and reloads NGINX, primarily after certificate renewal.
+      responses:
+        '204': {description: NGINX reloaded.}
+        '409': {$ref: '#/components/responses/Conflict'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    RouteId:
+      name: routeId
+      in: path
+      required: true
+      schema: {type: string, pattern: '^[a-z][a-z0-9-]{0,62}$'}
+  schemas:
+    RouteInput:
+      type: object
+      additionalProperties: false
+      required: [domains, upstream]
+      properties:
+        domains:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items: {type: string, format: hostname}
+        upstream:
+          type: string
+          description: HTTP URL using a single Docker ingress-network alias as its host.
+          pattern: '^http://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?::[0-9]{1,5})?/?$'
+          examples: [http://app-gateway:8080]
+        tls: {type: boolean, default: false}
+        websocket: {type: boolean, default: false}
+        max_body_mb: {type: integer, minimum: 1, maximum: 100, default: 2}
+        enabled: {type: boolean, default: true}
+    Route:
+      allOf:
+        - type: object
+          required: [id]
+          properties:
+            id: {type: string}
+        - $ref: '#/components/schemas/RouteInput'
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [status, message]
+          properties:
+            status: {type: integer}
+            message: {type: string}
+  responses:
+    NotFound:
+      description: Route or endpoint not found.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Conflict:
+      description: Candidate routing or NGINX reload was rejected.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Invalid:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}

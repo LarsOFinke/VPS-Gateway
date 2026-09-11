@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/lib/target.sh"
+gateway_select_runtime_target "$ROOT_DIR" "$@"
+gateway_strip_target_arguments "$@"
+((${#GATEWAY_REMAINING_ARGS[@]} == 0)) || { echo 'Usage: scripts/setup [--test|--production] [--config FILE]' >&2; exit 2; }
+
+target="$GATEWAY_TARGET"
+config_file="$GATEWAY_RUNTIME_CONFIG_FILE"
+template="$ROOT_DIR/infrastructure/.env.$target.example"
+if [[ ! -e "$config_file" ]]; then
+  install -m 0600 "$template" "$config_file"
+  token="$(openssl rand -hex 32)"
+  sed -i "s/replace-with-a-long-random-token/$token/" "$config_file"
+  echo "[gateway:$target] Created $config_file; review LETSENCRYPT_EMAIL before certificate enrollment."
+fi
+gateway_load_runtime_config "$ROOT_DIR" "$config_file" "$target"
+docker network inspect "$GATEWAY_INGRESS_NETWORK" >/dev/null 2>&1 || \
+  docker network create --driver bridge --internal "$GATEWAY_INGRESS_NETWORK" >/dev/null
+network_internal="$(docker network inspect --format '{{.Internal}}' "$GATEWAY_INGRESS_NETWORK")"
+[[ "$network_internal" == true ]] || {
+  echo "[gateway:$target] Ingress network must be internal: $GATEWAY_INGRESS_NETWORK" >&2
+  echo "[gateway:$target] Recreate the unused network with: docker network create --driver bridge --internal $GATEWAY_INGRESS_NETWORK" >&2
+  exit 1
+}
+docker compose --project-directory "$ROOT_DIR" --env-file "$config_file" up -d --build gateway
+docker compose --project-directory "$ROOT_DIR" --env-file "$config_file" exec -T gateway python -m vps_gateway.healthcheck
+echo "[gateway:$target] Gateway is healthy (HTTP $GATEWAY_HTTP_PORT, HTTPS $GATEWAY_HTTPS_PORT, API loopback $GATEWAY_API_PORT)."

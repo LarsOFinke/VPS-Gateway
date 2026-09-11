@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/lib/target.sh"
+gateway_select_runtime_target "$ROOT_DIR" "$@"
+gateway_strip_target_arguments "$@"
+set -- "${GATEWAY_REMAINING_ARGS[@]}"
+gateway_load_runtime_config "$ROOT_DIR" "$GATEWAY_RUNTIME_CONFIG_FILE" "$GATEWAY_TARGET"
+
+if [[ $# -ne 3 ]]; then
+  echo "usage: $0 [--test|--production] ROUTE_ID DOMAIN UPSTREAM" >&2
+  exit 2
+fi
+[[ "${LETSENCRYPT_EMAIL:-}" != "" && "$LETSENCRYPT_EMAIL" != "admin@example.com" ]] || {
+  echo "[gateway:$GATEWAY_TARGET] Set a real LETSENCRYPT_EMAIL before certificate enrollment." >&2
+  exit 2
+}
+route_id="$1"; domain="$2"; upstream="$3"
+payload="$(mktemp)"
+trap 'rm -f "$payload"' EXIT HUP INT TERM
+
+write_payload() {
+  python3 -c 'import json,sys; json.dump({"domains":[sys.argv[1]],"upstream":sys.argv[2],"tls":sys.argv[3] == "true"},sys.stdout)' \
+    "$domain" "$upstream" "$1" >"$payload"
+}
+control=("$ROOT_DIR/scripts/gatewayctl" "--$GATEWAY_TARGET" --config "$GATEWAY_RUNTIME_CONFIG_FILE")
+write_payload false
+"${control[@]}" apply "$route_id" "$payload"
+
+certbot_args=(certonly --webroot -w /var/www/acme --non-interactive --agree-tos --no-eff-email --email "$LETSENCRYPT_EMAIL" -d "$domain")
+[[ -z "${GATEWAY_ACME_SERVER:-}" ]] || certbot_args+=(--server "$GATEWAY_ACME_SERVER")
+docker compose --project-directory "$ROOT_DIR" --env-file "$GATEWAY_RUNTIME_CONFIG_FILE" run --rm certbot "${certbot_args[@]}"
+
+write_payload true
+"${control[@]}" apply "$route_id" "$payload"
+printf '\n[gateway:%s] Connected https://%s to %s\n' "$GATEWAY_TARGET" "$domain" "$upstream"

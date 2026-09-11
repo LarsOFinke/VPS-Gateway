@@ -1,0 +1,9 @@
+[Unit]
+Description=Renew VPS Gateway TLS certificates (%i)
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/vps-gateway/%i.conf
+ExecStart=/usr/bin/env bash -c 'exec "$GATEWAY_INSTALL_ROOT/current/scripts/renew-certificates" "--$GATEWAY_ENVIRONMENT" --config "$GATEWAY_INSTALL_ROOT/shared/.env"'

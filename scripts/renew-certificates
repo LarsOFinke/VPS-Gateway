@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/lib/target.sh"
+gateway_select_runtime_target "$ROOT_DIR" "$@"
+gateway_strip_target_arguments "$@"
+((${#GATEWAY_REMAINING_ARGS[@]} == 0)) || { echo 'usage: renew-certificates [--test|--production] [--config FILE]' >&2; exit 2; }
+gateway_load_runtime_config "$ROOT_DIR" "$GATEWAY_RUNTIME_CONFIG_FILE" "$GATEWAY_TARGET"
+
+certbot_args=(renew --webroot -w /var/www/acme --quiet)
+[[ -z "${GATEWAY_ACME_SERVER:-}" ]] || certbot_args+=(--server "$GATEWAY_ACME_SERVER")
+docker compose --project-directory "$ROOT_DIR" --env-file "$GATEWAY_RUNTIME_CONFIG_FILE" run --rm certbot "${certbot_args[@]}"
+"$ROOT_DIR/scripts/gatewayctl" "--$GATEWAY_TARGET" --config "$GATEWAY_RUNTIME_CONFIG_FILE" reload

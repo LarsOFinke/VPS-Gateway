@@ -1,0 +1,2 @@
+GATEWAY_INSTALL_ROOT=/srv/vps-gateway
+GATEWAY_ENVIRONMENT=production
