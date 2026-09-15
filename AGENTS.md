@@ -1,19 +1,15 @@
-# VPS Gateway contributor guide
+# VPS server configuration guide
 
-Read `.agents/ONBOARDING.md` before broad work.
+This repository performs one task: install the distribution-provided NGINX and
+Certbot packages on a Debian/Ubuntu VPS. It does not own project site files.
 
-This repository configures host-level NGINX for a small VPS. Applications remain
-independent Docker Compose projects and expose exactly one HTTP service on a
-unique `127.0.0.1` host port. NGINX maps public hostnames to those ports.
+- Projects install their own configuration in `/etc/nginx/sites-available/`,
+  enable it in `/etc/nginx/sites-enabled/`, test, and reload NGINX.
+- Project containers publish only a unique `127.0.0.1` host port.
+- Do not add route registration, custom NGINX directories, target profiles,
+  gateway containers, APIs, state, or deployment orchestration.
+- Keep `setup.sh` idempotent and preserve existing NGINX configuration.
+- Do not commit project names, domains, certificates, or secrets.
+- Executable files may not exceed 420 lines.
 
-- Do not add a gateway container, shared Docker network, API, UI, or route store.
-- Only host NGINX and Certbot own public ports and certificates.
-- Route changes must validate input, run `nginx -t`, reload, and restore on error.
-- Overwrite untrusted forwarding headers at the public boundary.
-- Test is default; production requires explicit `--production`.
-- Keep project names, domains, secrets, certificates, and installed routes out of
-  this repository.
-- Executable Python and shell files may not exceed 420 lines.
-
-Run focused checks and `make validate` before handoff. Do not commit or push
-unless requested.
+Run `make validate` before handoff. Do not commit or push unless requested.

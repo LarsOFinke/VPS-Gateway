@@ -1,14 +1,11 @@
 # Quality standards
 
-- Preserve `Internet -> host NGINX -> loopback port -> application container`.
-- Do not add a gateway container, Docker network integration, API, UI, or route
-  database.
-- Validate route identifiers, domains, and ports before generating NGINX.
-- Route writes are atomic; activation requires `nginx -t` and restores on error.
-- Bind application HTTP ports to `127.0.0.1`, never a public interface.
-- Test is default and production requires explicit `--production`.
-- NGINX and Certbot are the sole public port and TLS owners.
-- Do not version installed routes, domains, certificates, or secrets.
-- Shell scripts use strict mode, quote expansions, and produce useful failures.
+- Keep this repository a one-time package bootstrap, not a gateway application.
+- Preserve standard Debian/Ubuntu NGINX paths and existing configuration.
+- Project repositories own their site files, domains, ports, and TLS onboarding.
+- Application ports bind to `127.0.0.1`, never a public interface.
+- Site changes run `nginx -t` before a graceful reload.
+- Do not add route APIs, registration scripts, custom state, Docker integration,
+  server target profiles, or project-specific data.
 - Executable files stay at or below 420 lines.
-- Behavior, tests, docs, and `.agents` caches change together.
+- Documentation and validation change with behavior.

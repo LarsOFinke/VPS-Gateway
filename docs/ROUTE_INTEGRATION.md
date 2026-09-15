@@ -1,7 +1,10 @@
-# Connect a Compose project
+# Project integration
 
-Choose one unused high host port per project. Keep the container's existing
-private networks and publish only its HTTP entry point:
+Every project owns its NGINX file and the host port it targets.
+
+## Compose
+
+Publish only the web entry point and bind it to loopback:
 
 ```yaml
 services:
@@ -10,27 +13,24 @@ services:
       - "127.0.0.1:18081:8080"
 ```
 
-The service must listen on `0.0.0.0:8080` inside the container. Do not publish
-databases, queues, or internal APIs. Confirm the loopback endpoint locally:
+The container must listen on `0.0.0.0:8080`. Choose another high host port for
+every other project. Never publish databases or internal APIs.
+
+## NGINX
+
+Start from `examples/project-site.conf`, replace its hostname and loopback port,
+and keep the resulting file in the application repository. During onboarding:
 
 ```bash
-curl --fail --header 'Host: storefront.example.org' http://127.0.0.1:18081/
+sudo install -m 0644 deploy/nginx/site.conf /etc/nginx/sites-available/app.conf
+sudo ln -sfn /etc/nginx/sites-available/app.conf /etc/nginx/sites-enabled/app.conf
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
-Point the domain's A and/or AAAA records to the VPS. Then connect it:
+DNS must point to the VPS before running `sudo certbot --nginx`. Certbot can edit
+the installed file to add HTTPS and renew the certificate automatically. If the
+application later copies its source file again, its source must include the final
+TLS configuration so it does not overwrite Certbot’s changes.
 
-```bash
-sudo ./scripts/connect-route --production \
-  storefront storefront.example.org 18081
-```
-
-The route ID and domain are lowercase. Reusing the same ID and domain updates
-the loopback port. A different route cannot claim an existing domain.
-
-The application should allow its public hostname and trust forwarded headers
-from the local NGINX proxy. Secure cookies and redirects should use the forwarded
-HTTPS scheme.
-
-For migration from a project-owned public NGINX container, first add and verify
-the loopback binding. Stop publishing that project's ports 80/443 before starting
-host NGINX; two processes cannot own the same host ports.
+Application deployments that do not change the site file require no NGINX reload.

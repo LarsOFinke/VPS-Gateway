@@ -1,21 +1,18 @@
 # Architecture
 
-The VPS runs one ordinary host NGINX installation. DNS for multiple domains may
-point to the same IPv4 and IPv6; TLS SNI and HTTP `Host` select the site file.
-Each route proxies to a unique high port bound only on `127.0.0.1`.
+The VPS uses its distribution-provided NGINX installation as the only public
+listener on ports 80 and 443. Multiple DNS A/AAAA records may point to the same
+address; NGINX separates them by TLS SNI and HTTP `Host`.
 
-Docker is deliberately outside the routing layer. Container IP addresses,
-Compose project names, and Docker DNS are irrelevant because Docker publishes a
-stable loopback port. Recreating an application container does not change NGINX.
+Each application remains an independent Compose project. Its web service exposes
+one unique high port on `127.0.0.1`, while databases and internal services stay
+on project-private networks.
 
-Each application remains isolated:
+```text
+Internet -> host NGINX -> 127.0.0.1:<project port> -> project web container
+```
 
-- private application/database networks stay inside its Compose project;
-- only its chosen HTTP service publishes a host port;
-- the binding is `127.0.0.1`, never a public interface;
-- projects receive different host ports, avoiding collisions.
-
-NGINX and Certbot own ports 80/443 and public TLS. Unknown hosts fail closed.
-The gateway overwrites forwarding headers before proxying. Adding a route changes
-one file under `/etc/vps-gateway/sites`, then runs `nginx -t` and a graceful
-reload. It does not rebuild or restart NGINX.
+There is no gateway runtime or central route state. Each project owns its site
+file under the standard NGINX `sites-available`/`sites-enabled` layout. Adding or
+changing a file requires `nginx -t` followed by a graceful reload, not an NGINX
+redeployment.

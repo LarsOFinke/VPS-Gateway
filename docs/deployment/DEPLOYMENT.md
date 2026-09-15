@@ -1,33 +1,18 @@
-# Deployment
+# Server setup
 
-This repository is copied or cloned onto the selected VPS and run there. There
-is no gateway image or application release.
-
-Requirements on Debian/Ubuntu:
+Run once on each Debian/Ubuntu VPS:
 
 ```bash
-sudo apt-get update
-sudo apt-get install nginx certbot
+sudo ./setup.sh
 ```
 
-Configure a test server:
+The script installs `nginx`, `certbot`, and `python3-certbot-nginx`, validates the
+existing NGINX configuration, enables the service, and starts or gracefully
+reloads it. It does not install project sites or replace distribution defaults.
 
-```bash
-sudo ./scripts/setup --test --email admin@example.org
-```
+Test versus production selection belongs to the caller: connect to the intended
+server and deploy that environment’s project site file. The base NGINX server has
+no environment-specific state and therefore needs no target profiles.
 
-Configure the production server:
-
-```bash
-sudo ./scripts/setup --production --email admin@example.org
-```
-
-Test is the command default. A production server records `production` under
-`/etc/vps-gateway/environment`, so later commands without `--production` fail
-instead of changing production accidentally. Test and production should be
-separate VPS instances because both use public ports 80/443.
-
-Before setup, stop any container or old proxy that publishes host ports 80/443.
-Application containers continue running through their new loopback bindings.
-Setup preserves an existing VPS-Gateway site directory and verifies the complete
-NGINX configuration before activation.
+Before installation, ensure no container already publishes host ports 80 or 443.
+Project containers should be migrated to unique loopback ports first.

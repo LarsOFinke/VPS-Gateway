@@ -1,14 +1,12 @@
 # Module cache
 
-| Module | Responsibility | Check |
-| --- | --- | --- |
-| `config/vps-gateway.conf` | maps, closed defaults, installed site include | test-VPS smoke |
-| `scripts/lib/target.sh` | target and root safety | `test_target_selection.sh` |
-| `scripts/lib/routes.sh` | render and transactional reload | `test_routes.sh` |
-| `scripts/setup` | host NGINX installation | shell gate/test VPS |
-| `scripts/connect-route` | HTTP challenge to HTTPS route | ACME staging rehearsal |
-| `scripts/remove-route` | checked site removal | shell gate |
-| `scripts/renew-certificates` | manual renewal and reload | test VPS |
+| File | Responsibility |
+| --- | --- |
+| `setup.sh` | Install packages, validate, enable/start NGINX |
+| `examples/project-site.conf` | Non-installed reference for project-owned sites |
+| `README.md` | Complete normal workflow |
+| `docs/ROUTE_INTEGRATION.md` | Compose and site-file ownership contract |
+| `infrastructure/scripts/quality/` | Repository-only validation |
 
-Application Compose files own loopback port publishing. This repository never
-edits project files or interacts with Docker.
+There is deliberately no routing module. Route implementation belongs to each
+application repository.
