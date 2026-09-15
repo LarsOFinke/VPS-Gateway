@@ -1,46 +1,30 @@
 # Project cache
 
-> Reviewed 2026-09-15. Source and primary docs take precedence.
+> Reviewed 2026-09-15. Primary source and docs take precedence.
 
-## Overview
+VPS-Gateway is a small host NGINX configuration. It routes several DNS names on
+one VPS address to unique application ports bound on `127.0.0.1`.
 
-- Product: VPS-wide hostname routing and public TLS.
-- Runtime: one NGINX process on container ports 8080/8443.
-- State: persistent, human-readable route fragments plus Certbot volumes.
-- Connectivity: NGINX joins a target-specific external Docker-internal ingress
-  network and a project-local edge network. Only selected application gateways
-  join ingress; all other application services remain private.
-- Resolution: Docker DNS aliases with variable `proxy_pass`, so application
-  restarts do not prevent NGINX startup or reload.
+There is no runtime built by this repository. Debian/Ubuntu NGINX and Certbot
+run directly on the server. Docker remains entirely inside application projects;
+stable host ports remove any dependency on container addresses or networks.
 
-There is intentionally no control API, browser panel, JSON store, or Docker
-socket. Host scripts are the scriptable interface.
+## State
 
-## Targets
+- `/etc/nginx/conf.d/00-vps-gateway.conf`: installed base/default servers.
+- `/etc/vps-gateway/sites/*.conf`: generated hostname routes.
+- `/etc/vps-gateway/environment`: `test` or `production` safety marker.
+- `/etc/vps-gateway/letsencrypt-email`: ACME contact.
+- `/etc/letsencrypt`: certificate state and private keys.
+- `/etc/letsencrypt/renewal-hooks/deploy/vps-gateway-reload`: checked NGINX reload.
 
-| Concern | Test | Production |
-| --- | --- | --- |
-| Flag | default / `--test` | explicit `--production` |
-| Runtime profile | `.env.test` | `.env.production` |
-| Host ports | 18080/18443 | 80/443 |
-| Ingress network | `vps-ingress-test` | `vps-ingress` |
-| ACME | Let's Encrypt staging | Let's Encrypt production |
-| Install root | `/srv/vps-gateway-test` | `/srv/vps-gateway` |
+## Commands
 
-## Flows
+- `scripts/setup`: install base config and activate host NGINX.
+- `scripts/connect-route`: ACME bootstrap, certificate, HTTPS route, reload.
+- `scripts/list-routes`: display route metadata.
+- `scripts/remove-route`: remove one site with restoration on failure.
+- `scripts/renew-certificates`: manual Certbot renewal and checked reload.
 
-- `scripts/setup`: profile and route-dir initialization, internal-network
-  verification, Compose build/start, and `nginx -t`.
-- `scripts/connect-route`: validated ACME-only HTTP fragment, certificate enrollment, validated
-  HTTPS fragment, and reload with restoration on failure.
-- `scripts/list-routes` / `remove-route`: transparent route operations.
-- `scripts/renew-certificates`: Certbot renewal, syntax check, reload.
-- `deploy.sh` / `update.sh`: signed immutable origin-to-target releases;
-  `shared/.env` and `shared/routes` persist between versions.
-
-## Security
-
-Unknown hosts fail closed. Forwarding headers are overwritten. The container is
-read-only and has no Docker socket. Route inputs accept only lowercase DNS-safe
-identifiers and numeric ports. Test/production selectors reject ambiguity and
-private profiles require mode 0600.
+Test is the default selector. Every production operation must state
+`--production`, which must agree with the server marker.

@@ -1,25 +1,19 @@
 # VPS Gateway contributor guide
 
-Read `.agents/ONBOARDING.md` before broad work and run
-`bash .agents/scripts/project-context.sh`.
+Read `.agents/ONBOARDING.md` before broad work.
 
-## Purpose and invariants
+This repository configures host-level NGINX for a small VPS. Applications remain
+independent Docker Compose projects and expose exactly one HTTP service on a
+unique `127.0.0.1` host port. NGINX maps public hostnames to those ports.
 
-This repository owns the VPS-wide public NGINX ingress and is the only service
-that binds production ports 80 and 443. Applications keep independent Compose
-projects and private networks. Only their selected HTTP gateway joins the shared
-external ingress network, under a unique DNS alias.
-
-- Keep the runtime NGINX-only. Do not add an API, UI, route database, Docker
-  socket, or project-specific knowledge.
-- Routes are validated NGINX fragments in the target's persistent route
-  directory. Syntax-test, reload, and restore on failure.
-- Overwrite client forwarding headers at this trust boundary.
-- Keep unknown hosts closed and application containers off public ports.
-- NGINX and Certbot here are the sole owners of public TLS.
-- Test is the default. Production always requires explicit `--production`.
-- Never version runtime profiles, certificates, route state, or release output.
+- Do not add a gateway container, shared Docker network, API, UI, or route store.
+- Only host NGINX and Certbot own public ports and certificates.
+- Route changes must validate input, run `nginx -t`, reload, and restore on error.
+- Overwrite untrusted forwarding headers at the public boundary.
+- Test is default; production requires explicit `--production`.
+- Keep project names, domains, secrets, certificates, and installed routes out of
+  this repository.
 - Executable Python and shell files may not exceed 420 lines.
 
-Run focused checks first and `make validate` before handing off broad work. Do
-not commit or push unless explicitly requested.
+Run focused checks and `make validate` before handoff. Do not commit or push
+unless requested.

@@ -1,60 +1,67 @@
 # VPS Gateway
 
-A deliberately small server configuration for hosting several isolated Docker
-Compose projects on one VPS and one IPv4/IPv6 address. NGINX owns ports 80/443,
-selects a route from TLS SNI and the HTTP `Host`, and proxies to a Docker network
-alias. Certbot owns public certificates.
-
-There is no management service, database, admin UI, or Docker socket. Persistent
-state is limited to readable NGINX route files and certificate volumes.
-
-## Boundary
+Small host-level NGINX configuration for routing a few containerized projects on
+one VPS. It is configuration, not another application.
 
 ```text
-Internet -> VPS-Gateway NGINX -> shared ingress network -> application gateway
-                                                        -> app-private network
+DNS A/AAAA records
+        ↓
+host NGINX :80/:443
+        ├── site-a.example → 127.0.0.1:18081 → Project A container
+        └── site-b.example → 127.0.0.1:18082 → Project B container
 ```
 
-Each application remains a separate Compose project. Its database and internal
-services stay only on project-private networks. Exactly one HTTP-facing service
-opts into the external `vps-ingress` network with a globally unique alias and no
-public host port.
+Every project keeps its own Compose networks, database, and deployment. Its
+public HTTP service publishes one unique loopback-only port. Nothing else is
+exposed and no shared Docker network is required.
 
-Multiple DNS A/AAAA records may point to the same VPS address. NGINX separates
-them by hostname; separate IP addresses are unnecessary.
+## Server setup
 
-## Setup
-
-Requirements: Docker Engine with Compose, Bash, OpenSSL, and `flock`.
+On a Debian/Ubuntu test server:
 
 ```bash
-./scripts/setup                 # test: 18080/18443 and ACME staging
-./scripts/setup --production    # production: 80/443, explicit only
+sudo apt-get install nginx certbot
+sudo ./scripts/setup --test --email admin@example.org
 ```
 
-Setup creates a private target profile, a persistent route directory, and the
-target's external Docker-internal ingress network. Review `LETSENCRYPT_EMAIL`
-before enrolling a certificate.
-
-## Connect an application
-
-After its gateway container has joined the selected ingress network:
+On production, selection must be explicit:
 
 ```bash
-./scripts/connect-route --test storefront-test storefront.test.example.org storefront-web-test 8080
-./scripts/connect-route --production storefront storefront.example.org storefront-web 8080
+sudo ./scripts/setup --production --email admin@example.org
 ```
 
-The command validates identifiers, installs an ACME-only HTTP route, obtains the
-certificate through the webroot challenge, then transactionally enables HTTPS.
-The command is idempotent for the same route ID; certificate retention is left
-to Certbot.
+Setup installs one base file under `/etc/nginx/conf.d/`, creates the private site
+directory and fallback certificate, disables only the conventional distribution
+default-site symlink, validates NGINX, and reloads it. Test and production are
+expected to be different servers; the installed marker prevents accidental
+cross-target commands.
+
+## Add a project
+
+Publish its HTTP entry point on a unique localhost port:
+
+```yaml
+services:
+  web:
+    ports:
+      - "127.0.0.1:18081:8080"
+```
+
+Then, after DNS points to the VPS:
+
+```bash
+sudo ./scripts/connect-route --production storefront storefront.example.org 18081
+```
+
+This writes an ACME-only HTTP site, obtains the certificate, writes the HTTPS
+proxy site, runs `nginx -t`, and reloads NGINX. It never rebuilds or redeploys
+NGINX.
 
 ```bash
 ./scripts/list-routes --production
-./scripts/remove-route --production storefront
-./scripts/renew-certificates --production
+sudo ./scripts/remove-route --production storefront
+sudo ./scripts/renew-certificates --production
 ```
 
-See [route integration](docs/ROUTE_INTEGRATION.md), [deployment](docs/deployment/DEPLOYMENT.md),
-and [operations](docs/deployment/OPERATIONS.md).
+See [project integration](docs/ROUTE_INTEGRATION.md) and
+[operations](docs/deployment/OPERATIONS.md).

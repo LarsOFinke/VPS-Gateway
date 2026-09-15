@@ -4,13 +4,11 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/scripts/lib/target.sh"
 source "$ROOT_DIR/scripts/lib/routes.sh"
-gateway_select_runtime_target "$ROOT_DIR" "$@"
+gateway_select_target "$@"
 gateway_strip_target_arguments "$@"
-((${#GATEWAY_REMAINING_ARGS[@]} == 0)) || { echo 'usage: renew-certificates [--test|--production] [--config FILE]' >&2; exit 2; }
-gateway_load_runtime_config "$ROOT_DIR" "$GATEWAY_RUNTIME_CONFIG_FILE" "$GATEWAY_TARGET"
+((${#GATEWAY_REMAINING_ARGS[@]} == 0)) || { echo "usage: $0 [--test|--production]" >&2; exit 2; }
+gateway_require_root
+gateway_require_installed_target
 
-certbot_args=(renew --webroot -w /var/www/acme --quiet)
-[[ -z "${GATEWAY_ACME_SERVER:-}" ]] || certbot_args+=(--server "$GATEWAY_ACME_SERVER")
-docker compose --project-directory "$ROOT_DIR" --env-file "$GATEWAY_RUNTIME_CONFIG_FILE" run --rm certbot "${certbot_args[@]}"
-gateway_compose exec -T gateway nginx -t -c /etc/nginx/nginx.conf
-gateway_compose exec -T gateway nginx -s reload
+certbot renew --quiet
+gateway_reload

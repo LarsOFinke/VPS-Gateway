@@ -3,36 +3,87 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/scripts/lib/target.sh"
-gateway_select_runtime_target "$ROOT_DIR" "$@"
+gateway_select_target "$@"
 gateway_strip_target_arguments "$@"
-((${#GATEWAY_REMAINING_ARGS[@]} == 0)) || { echo 'Usage: scripts/setup [--test|--production] [--config FILE]' >&2; exit 2; }
+set -- "${GATEWAY_REMAINING_ARGS[@]}"
+email=""
+while (($#)); do
+  case "$1" in
+    --email) [[ $# -ge 2 ]] || { echo '[gateway] --email requires a value.' >&2; exit 2; }; email="$2"; shift 2 ;;
+    *) echo 'usage: scripts/setup [--test|--production] --email ADDRESS' >&2; exit 2 ;;
+  esac
+done
+[[ "$email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || {
+  echo '[gateway] A valid certificate contact is required with --email.' >&2
+  exit 2
+}
+gateway_require_root
 
-target="$GATEWAY_TARGET"
-config_file="$GATEWAY_RUNTIME_CONFIG_FILE"
-template="$ROOT_DIR/infrastructure/.env.$target.example"
-if [[ ! -e "$config_file" ]]; then
-  install -m 0600 "$template" "$config_file"
-  echo "[gateway:$target] Created $config_file; review LETSENCRYPT_EMAIL before certificate enrollment."
+for command in nginx certbot openssl systemctl flock; do
+  command -v "$command" >/dev/null || {
+    echo "[gateway] Missing command '$command'. Install nginx, certbot, and openssl first." >&2
+    exit 1
+  }
+done
+
+config_root=/etc/vps-gateway
+sites_dir="$config_root/sites"
+environment_file="$config_root/environment"
+email_file="$config_root/letsencrypt-email"
+nginx_config=/etc/nginx/conf.d/00-vps-gateway.conf
+had_environment=false
+if [[ -f "$environment_file" ]]; then
+  had_environment=true
+  installed="$(<"$environment_file")"
+  [[ "$installed" == "$GATEWAY_TARGET" ]] || {
+    echo "[gateway] Refusing to change this server from '$installed' to '$GATEWAY_TARGET'." >&2
+    exit 2
+  }
 fi
-[[ -f "$config_file" && ! -L "$config_file" && "$(stat -c '%a:%u' "$config_file")" == "600:$(id -u)" ]] || {
-  echo "[gateway:$target] Runtime configuration must be a mode-600 regular file owned by this user: $config_file" >&2
-  exit 1
-}
-if ! grep -q '^GATEWAY_ROUTES_DIR=' "$config_file"; then
-  printf 'GATEWAY_ROUTES_DIR=%s\n' "$ROOT_DIR/.runtime/$target/routes" >>"$config_file"
+
+install -d -m 0755 -o root -g root "$config_root" "$sites_dir" /var/www/letsencrypt \
+  /etc/letsencrypt/renewal-hooks/deploy
+install -m 0755 -o root -g root "$ROOT_DIR/config/certbot-deploy-hook.sh" \
+  /etc/letsencrypt/renewal-hooks/deploy/vps-gateway-reload
+if [[ ! -s "$config_root/default.crt" || ! -s "$config_root/default.key" ]]; then
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+    -subj '/CN=unconfigured.invalid' -keyout "$config_root/default.key" \
+    -out "$config_root/default.crt" >/dev/null 2>&1
+  chmod 0600 "$config_root/default.key"
 fi
-gateway_load_runtime_config "$ROOT_DIR" "$config_file" "$target"
-[[ ! -L "$GATEWAY_ROUTES_DIR" ]] || { echo "[gateway:$target] Route directory may not be a symlink." >&2; exit 1; }
-install -d -m 0755 "$GATEWAY_ROUTES_DIR"
-docker network inspect "$GATEWAY_INGRESS_NETWORK" >/dev/null 2>&1 || \
-  docker network create --driver bridge --internal "$GATEWAY_INGRESS_NETWORK" >/dev/null
-network_internal="$(docker network inspect --format '{{.Internal}}' "$GATEWAY_INGRESS_NETWORK")"
-[[ "$network_internal" == true ]] || {
-  echo "[gateway:$target] Ingress network must be internal: $GATEWAY_INGRESS_NETWORK" >&2
-  echo "[gateway:$target] Recreate the unused network with: docker network create --driver bridge --internal $GATEWAY_INGRESS_NETWORK" >&2
-  exit 1
+
+backup="$(mktemp)"
+had_config=false
+if [[ -f "$nginx_config" ]]; then cp "$nginx_config" "$backup"; had_config=true; fi
+default_link=/etc/nginx/sites-enabled/default
+disabled_default=false
+if [[ -L "$default_link" && "$(readlink -f "$default_link")" == /etc/nginx/sites-available/default ]]; then
+  unlink "$default_link"
+  disabled_default=true
+fi
+
+restore() {
+  if [[ "$had_config" == true ]]; then
+    install -m 0644 -o root -g root "$backup" "$nginx_config"
+  else
+    rm -f -- "$nginx_config"
+  fi
+  if [[ "$disabled_default" == true && ! -e "$default_link" ]]; then
+    ln -s /etc/nginx/sites-available/default "$default_link"
+  fi
+  if [[ "$had_environment" == false ]]; then rm -f -- "$environment_file" "$email_file"; fi
 }
-docker compose --project-directory "$ROOT_DIR" --env-file "$config_file" up -d --build \
-  --wait --wait-timeout 30 gateway
-docker compose --project-directory "$ROOT_DIR" --env-file "$config_file" exec -T gateway nginx -t -c /etc/nginx/nginx.conf
-echo "[gateway:$target] Gateway is healthy (HTTP $GATEWAY_HTTP_PORT, HTTPS $GATEWAY_HTTPS_PORT)."
+trap 'restore; rm -f -- "$backup"' ERR
+install -m 0644 -o root -g root "$ROOT_DIR/config/vps-gateway.conf" "$nginx_config"
+nginx -t
+if systemctl is-active --quiet nginx; then
+  systemctl reload nginx
+else
+  systemctl enable --now nginx
+fi
+printf '%s\n' "$GATEWAY_TARGET" >"$environment_file"
+printf '%s\n' "$email" >"$email_file"
+chmod 0644 "$environment_file" "$email_file"
+trap - ERR
+rm -f -- "$backup"
+echo "[gateway:$GATEWAY_TARGET] Host NGINX is ready on ports 80 and 443."

@@ -1,25 +1,20 @@
 # Testing
 
-## Checks
-
 ```bash
-make test                 # anonymization and route rendering/rollback
-make infrastructure-test # targets, network setup, releases, versioning
-make compose-config       # both example profiles
-make check-tree           # repository conventions
-make validate             # complete gate
+make test
+make check-tree
+make validate
 ```
 
-The route test covers constrained input, deterministic HTTP/TLS fragments,
-trusted forwarding headers, and restoration after a failed `nginx -t`. Setup
-tests reject a non-internal shared network. The complete gate also checks shell
-syntax, runs ShellCheck when installed, and renders both Compose targets.
+The tests cover target selection, constrained route inputs, deterministic HTTP
+and HTTPS site generation, forwarding-header policy, anonymization, versioning,
+shell syntax, ShellCheck when installed, and repository structure.
 
-Before release, build the real image and start the test profile. Confirm:
+On a disposable test VPS, also verify:
 
-1. `nginx -t` passes in the read-only container;
-2. unknown HTTP/TLS hosts hit the closed defaults;
-3. a disposable upstream alias works on the shared network;
-4. removing the upstream does not stop or invalidate NGINX;
-5. certificate enrollment succeeds against ACME staging;
-6. a route and certificate survive container recreation.
+1. setup disables the conventional distribution default and `nginx -t` passes;
+2. a container bound to `127.0.0.1:18081` is not externally reachable directly;
+3. its hostname is reachable through NGINX;
+4. ACME staging enrollment succeeds;
+5. changing the container while retaining the host port needs no NGINX change;
+6. an invalid route leaves the previous NGINX configuration active.

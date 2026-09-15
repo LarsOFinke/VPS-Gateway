@@ -1,9 +1,0 @@
-.git
-.env*
-__pycache__
-*.pyc
-tests
-deploy
-docs
-.agents
-release

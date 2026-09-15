@@ -4,26 +4,26 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/scripts/lib/target.sh"
 source "$ROOT_DIR/scripts/lib/routes.sh"
-gateway_select_runtime_target "$ROOT_DIR" "$@"
+gateway_select_target "$@"
 gateway_strip_target_arguments "$@"
 set -- "${GATEWAY_REMAINING_ARGS[@]}"
-gateway_load_runtime_config "$ROOT_DIR" "$GATEWAY_RUNTIME_CONFIG_FILE" "$GATEWAY_TARGET"
+gateway_require_root
+gateway_require_installed_target
 [[ $# -eq 1 ]] || { echo "usage: $0 [--test|--production] ROUTE_ID" >&2; exit 2; }
 gateway_validate_route_id "$1" || { echo '[gateway] Invalid route ID.' >&2; exit 2; }
 
-route="$GATEWAY_ROUTES_DIR/$1.conf"
+route="/etc/vps-gateway/sites/$1.conf"
 [[ -f "$route" && ! -L "$route" ]] || { echo "[gateway] Route does not exist: $1" >&2; exit 1; }
 backup="$(mktemp)"
 trap 'rm -f -- "$backup"' EXIT HUP INT TERM
-exec 9>"$GATEWAY_ROUTES_DIR/.routes.lock"
+exec 9>/run/lock/vps-gateway.lock
 flock 9
 cp "$route" "$backup"
 rm -f -- "$route"
-if ! gateway_compose exec -T gateway nginx -t -c /etc/nginx/nginx.conf || \
-   ! gateway_compose exec -T gateway nginx -s reload; then
-  install -m 0644 "$backup" "$route"
-  gateway_compose exec -T gateway nginx -s reload >/dev/null || true
+if ! gateway_reload; then
+  install -m 0644 -o root -g root "$backup" "$route"
+  gateway_reload >/dev/null || true
   echo '[gateway] Removal failed; the route was restored.' >&2
   exit 1
 fi
-echo "[gateway:$GATEWAY_TARGET] Removed route $1 (certificate retained)."
+echo "[gateway:$GATEWAY_TARGET] Removed route $1; its certificate was retained."

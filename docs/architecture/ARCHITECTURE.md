@@ -1,42 +1,21 @@
 # Architecture
 
-## Responsibilities
+The VPS runs one ordinary host NGINX installation. DNS for multiple domains may
+point to the same IPv4 and IPv6; TLS SNI and HTTP `Host` select the site file.
+Each route proxies to a unique high port bound only on `127.0.0.1`.
 
-VPS-Gateway owns only public ingress: ports 80/443, hostname selection,
-forwarding-header normalization, ACME challenges, and public certificates. It
-does not deploy applications, inspect Docker, or understand their internals.
+Docker is deliberately outside the routing layer. Container IP addresses,
+Compose project names, and Docker DNS are irrelevant because Docker publishes a
+stable loopback port. Recreating an application container does not change NGINX.
 
-NGINX is the only long-running process. Routes are individual `.conf` files in a
-persistent bind-mounted directory. Operator scripts validate constrained values,
-render a candidate, run `nginx -t`, reload without dropping connections, and
-restore the previous file if activation fails.
+Each application remains isolated:
 
-## Container isolation
+- private application/database networks stay inside its Compose project;
+- only its chosen HTTP service publishes a host port;
+- the binding is `127.0.0.1`, never a public interface;
+- projects receive different host ports, avoiding collisions.
 
-The target has one external Docker network (`vps-ingress` in production). It is
-created with `--internal`, so it provides container-to-container connectivity but
-no route to the internet. VPS-Gateway also joins its own edge network for public
-ports and Certbot connectivity.
-
-An application keeps its default/private networks and attaches only its chosen
-HTTP gateway to the shared network. A unique alias such as `storefront-web`
-becomes the upstream address. Databases and backend services never join the
-shared network. Applications do not publish 80/443 on the host.
-
-NGINX uses Docker's embedded resolver and a variable `proxy_pass`, so it can
-start or reload while an application is absent and follows container address
-changes automatically.
-
-## Hostname and trust handling
-
-DNS for many domains may resolve to the same IPv4 and IPv6. TLS SNI selects the
-certificate/server block; HTTP `Host` selects the route. Unknown HTTP hosts close
-with 444 and unknown TLS hosts receive 421 from a fallback certificate.
-
-The public gateway overwrites `X-Real-IP` and all `X-Forwarded-*` headers.
-Applications may trust those values only on the listener reachable through the
-internal ingress network. Public application listeners must not preserve
-client-supplied forwarding headers.
-
-No Docker socket is mounted. Route scripts operate through narrowly scoped
-Compose commands rather than a privileged daemon.
+NGINX and Certbot own ports 80/443 and public TLS. Unknown hosts fail closed.
+The gateway overwrites forwarding headers before proxying. Adding a route changes
+one file under `/etc/vps-gateway/sites`, then runs `nginx -t` and a graceful
+reload. It does not rebuild or restart NGINX.

@@ -1,39 +1,31 @@
 # Agent onboarding – VPS Gateway
 
-## Start
+Start with:
 
 ```bash
 bash .agents/scripts/project-context.sh
-sed -n '1,240p' .agents/PROJECT_CACHE.md
-sed -n '1,220p' .agents/MODULE_CACHE.md
+sed -n '1,220p' .agents/PROJECT_CACHE.md
+sed -n '1,200p' .agents/MODULE_CACHE.md
 bash .agents/scripts/check-changes.sh
 ```
 
-For failures, also read `.agents/DEBUGGING_CACHE.md`. Inspect the affected flow,
-callers, tests, configuration, and primary docs before editing.
+## Fixed boundary
 
-## Fixed boundaries
-
-- Runtime: `Internet -> VPS Gateway NGINX -> application gateway`.
-- Only VPS-Gateway binds production ports 80/443.
-- Runtime is NGINX-only. No API, UI, route database, or Docker socket.
-- Each application stays in its Compose project. Only its selected HTTP service
-  joins the external Docker-internal ingress network under a unique alias.
-- Route changes are validated, serialized, syntax-tested, and reversible.
-- Public TLS and ACME live here.
-- Test is default; production requires explicit `--production`.
-- Private profiles, certificates, and route files are never printed or versioned.
-
-## Entry points
+- Runtime: `Internet -> host NGINX -> 127.0.0.1 port -> application container`.
+- This repository is server configuration, not a deployed service.
+- Projects remain independent and publish only one loopback HTTP port.
+- No gateway container, shared Docker network, API, UI, or state service.
+- Test is default; production requires `--production` and an installed marker.
+- NGINX/Certbot own public ports and certificates.
+- Route changes validate, syntax-test, gracefully reload, and restore on failure.
 
 | Task | Start with |
 | --- | --- |
-| Architecture | `docs/architecture/ARCHITECTURE.md`, `compose.yml` |
-| Route rendering | `scripts/lib/routes.sh`, `tests/test_routes.sh` |
-| Application connection | `docs/ROUTE_INTEGRATION.md`, `scripts/connect-route` |
-| Target setup | `scripts/setup`, `scripts/lib/target.sh` |
-| Remote release | `infrastructure/scripts/release/` |
+| Architecture | `docs/architecture/ARCHITECTURE.md` |
+| Project connection | `docs/ROUTE_INTEGRATION.md` |
+| Installation | `scripts/setup`, `docs/deployment/DEPLOYMENT.md` |
+| Route generation | `scripts/lib/routes.sh`, `tests/test_routes.sh` |
 | Operations | `docs/deployment/OPERATIONS.md` |
-| Full verification | `make validate` |
+| Verification | `make validate` |
 
 Do not commit or push unless requested.

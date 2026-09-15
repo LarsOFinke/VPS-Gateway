@@ -1,39 +1,27 @@
 # Operations
 
-## Status
-
 ```bash
-docker compose --env-file .env.test ps
-docker compose --env-file .env.test logs --tail=200 gateway
-./scripts/list-routes --test
-docker compose --env-file .env.test exec gateway nginx -t -c /etc/nginx/nginx.conf
+systemctl status nginx
+sudo nginx -t
+journalctl -u nginx --since '30 minutes ago'
+./scripts/list-routes --production
 ```
 
-Use `--production` only after confirming the intended target. Route files are
-human-readable under `GATEWAY_ROUTES_DIR`; use the scripts for mutations so
-validation and rollback remain consistent.
+Adding or updating a site runs a graceful NGINX reload; it does not rebuild or
+restart a gateway deployment. Installed route files live under
+`/etc/vps-gateway/sites/` and should be changed through the scripts.
 
-## Certificates
+Common failures:
 
-`scripts/renew-certificates --<target>` runs Certbot and reloads NGINX only after
-a successful renewal and syntax check. Install the target-specific systemd timer
-from `deploy/systemd/`. ACME failures usually mean DNS A/AAAA or public port 80
-does not reach this gateway.
+- 421/444: no route owns the requested hostname.
+- 502/504: the project container is stopped or its loopback port changed.
+- ACME failure: DNS A/AAAA or public port 80 does not reach host NGINX.
+- redirect/cookie loop: the application does not honor forwarded HTTPS headers.
 
-## Troubleshooting
+Certbot's packaged systemd timer performs renewal automatically. Setup installs
+the standard deploy hook that validates and reloads NGINX after a renewed
+certificate. `scripts/renew-certificates` remains available for a manual run.
 
-- 421/444: unknown hostname or missing route.
-- 502/504: application stopped, wrong alias/port, or missing ingress attachment.
-- redirect/cookie loop: application does not trust the gateway's forwarded scheme.
-- NGINX rejects a route: inspect the bounded gateway log and certificate paths.
-
-Do not delete networks or certificate volumes as a diagnostic shortcut. If an
-ingress network is not internal, first drain attached containers, recreate it as
-documented, and reconnect them deliberately.
-
-## Backup and recovery
-
-Back up the target's `letsencrypt` volume, persistent route directory, and
-`shared/.env`. Certificate private keys require encrypted, access-controlled
-storage. Restore the matching release and these assets, run setup, validate
-NGINX, then test every hostname over both available IP families.
+Back up `/etc/vps-gateway` and `/etc/letsencrypt` with restricted access. The
+latter contains private keys. Recovery is: install NGINX/Certbot, restore those
+directories, install `config/vps-gateway.conf`, run `nginx -t`, then reload.
