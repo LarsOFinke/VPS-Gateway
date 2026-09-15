@@ -1,22 +1,17 @@
 # Module cache
 
-| Module | Responsibility | Primary tests/checks |
+| Module | Responsibility | Check |
 | --- | --- | --- |
-| `app.py` | HTTP transport, bearer auth, controller serialization | controller tests, container smoke |
-| `auth.py` | Admin password persistence, sessions, CSRF material, login cooldown | `test_auth.py`, `test_api.py` |
-| `checks.py` | Bounded upstream HTTP accessibility checks | `test_checks.py` |
-| `static/` | Loopback-only admin HTML, CSS, and JavaScript | API/browser smoke |
-| `models.py` | Strict route/domain/upstream validation | `test_models.py` |
-| `nginx.py` | Deterministic proxy/maintenance rendering and atomic test/reload/rollback | `test_nginx.py` |
-| `store.py` | Atomic versioned JSON state | `test_store.py`, controller rollback tests |
-| `config/nginx.conf` | Static listeners, closed defaults, logs, DNS, protocol maps | Compose render, image smoke |
-| `scripts/lib/target.sh` | Runtime test/production selection and private profile loading | `test_target_selection.sh` |
-| `scripts/setup` | Target-local Compose/network bootstrap and health | shell gates, deployment smoke |
-| `gatewayctl` | Scriptable authenticated API client | API container smoke |
-| `connect-route` | HTTP route -> ACME -> TLS transition | shell gates, staging-server rehearsal |
-| `infrastructure/scripts/release` | Artifact, SSH transfer, immutable activation/rollback | artifact contract, test deployment |
+| `config/nginx.conf` | listeners, defaults, Docker DNS, logs | image smoke |
+| `compose.yml` | ports, volumes, edge/ingress attachment | Compose render |
+| `scripts/lib/routes.sh` | validation, rendering, activation/rollback | `test_routes.sh` |
+| `scripts/lib/target.sh` | target selection and profile safety | `test_target_selection.sh` |
+| `scripts/setup` | profile, route dir, network, NGINX health | `test_setup_network.sh` |
+| `scripts/connect-route` | HTTP -> ACME -> HTTPS workflow | route test/staging rehearsal |
+| `scripts/remove-route` | validated route removal with restoration | shell gate |
+| `scripts/renew-certificates` | renewal and checked reload | staging rehearsal |
+| `infrastructure/scripts/release` | signed immutable releases | artifact test |
 
-Keep HTTP parsing in `app.py`, model rules in `models.py`, filesystem and process
-concerns in their owning modules, and target-selection policy in the shared shell
-libraries. Do not make API handlers render NGINX directly or let shell scripts edit
-generated NGINX configuration.
+Keep target policy in `target.sh` and route policy in `routes.sh`. Application
+repos own their Compose internals; this repository only documents the narrow
+shared-network attachment.

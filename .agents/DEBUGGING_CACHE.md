@@ -1,33 +1,24 @@
 # Debugging cache
 
-## Fast classification
-
-| Symptom | First checks | Likely boundary |
+| Symptom | First checks | Boundary |
 | --- | --- | --- |
-| Public 404/421/444 | DNS, requested Host/SNI, `gatewayctl list` | hostname declaration/default server |
-| 502/504 | application container, internal ingress network alias, upstream port | central -> application gateway |
-| Redirect or secure-cookie loop | forwarded scheme/port in downstream gateway | trusted proxy contract |
-| Route API 401 | selected target/profile, token mismatch | origin/target profile selection |
-| Admin login fails | bootstrap rotation, password, five-attempt cooldown | admin authentication |
-| Accessibility test fails | alias, container listener, ingress membership | gateway -> upstream |
-| Project returns 503 | project `enabled` state in panel/API | intentional maintenance route |
-| Route API 409 | gateway logs, certificate expiry/SANs, paths, `nginx -t` | render/reload transaction |
-| Route API 422 | request versus `openapi.yaml` | model validation |
-| ACME failure | DNS A/AAAA, port 80, selected staging/production endpoint | public HTTP challenge path |
-| Container unhealthy | both API and NGINX logs/processes | supervised container runtime |
-| Deploy selects wrong host | explicit flags and `.env.origin.<target>` | origin selector |
-
-## Safe commands
+| 421/444 | DNS, Host/SNI, `list-routes` | hostname route |
+| 502/504 | app status, alias, port, network membership | gateway -> app |
+| redirect/cookie loop | forwarded-scheme trust in app | application gateway |
+| ACME failure | A/AAAA, public port 80, target endpoint | DNS/public ingress |
+| unhealthy gateway | bounded logs and `nginx -t` | NGINX/config/cert |
+| wrong deployment host | explicit flag and origin profile | target selection |
 
 ```bash
 bash .agents/scripts/project-context.sh
 docker compose --env-file .env.test ps
 docker compose --env-file .env.test logs --tail=200 gateway
-./scripts/gatewayctl --test list
+./scripts/list-routes --test
 docker compose --env-file .env.test exec gateway nginx -t -c /etc/nginx/nginx.conf
+docker network inspect vps-ingress-test
 ```
 
-Add `--production` only after confirming the incident is on production. Never
-print a profile, bearer token, private key, or full certificate archive. Do not
-delete volumes as a diagnostic step. An NGINX reload failure should leave the old
-workers and prior generated configuration active; verify logs before retrying.
+Use production only after confirming the target. Do not print profiles or
+private keys, and do not delete networks or volumes as a diagnostic shortcut.
+Failed route activation should restore the preceding file; verify NGINX before
+retrying.

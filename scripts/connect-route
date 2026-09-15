@@ -3,35 +3,62 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/scripts/lib/target.sh"
+source "$ROOT_DIR/scripts/lib/routes.sh"
 gateway_select_runtime_target "$ROOT_DIR" "$@"
 gateway_strip_target_arguments "$@"
 set -- "${GATEWAY_REMAINING_ARGS[@]}"
 gateway_load_runtime_config "$ROOT_DIR" "$GATEWAY_RUNTIME_CONFIG_FILE" "$GATEWAY_TARGET"
 
-if [[ $# -ne 3 ]]; then
-  echo "usage: $0 [--test|--production] ROUTE_ID DOMAIN UPSTREAM" >&2
+[[ $# -eq 4 ]] || {
+  echo "usage: $0 [--test|--production] ROUTE_ID DOMAIN UPSTREAM_ALIAS UPSTREAM_PORT" >&2
   exit 2
-fi
-[[ "${LETSENCRYPT_EMAIL:-}" != "" && "$LETSENCRYPT_EMAIL" != "admin@example.com" ]] || {
+}
+route_id="$1"; domain="$2"; alias="$3"; port="$4"
+gateway_validate_route_id "$route_id" || { echo '[gateway] Invalid route ID.' >&2; exit 2; }
+gateway_validate_domain "$domain" || { echo '[gateway] Domain must be a lowercase FQDN.' >&2; exit 2; }
+gateway_validate_alias "$alias" || { echo '[gateway] Upstream alias must be a lowercase Docker DNS label.' >&2; exit 2; }
+gateway_validate_port "$port" || { echo '[gateway] Upstream port must be between 1 and 65535.' >&2; exit 2; }
+[[ "${LETSENCRYPT_EMAIL:-}" != "" && "$LETSENCRYPT_EMAIL" != admin@example.com ]] || {
   echo "[gateway:$GATEWAY_TARGET] Set a real LETSENCRYPT_EMAIL before certificate enrollment." >&2
   exit 2
 }
-route_id="$1"; domain="$2"; upstream="$3"
-payload="$(mktemp)"
-trap 'rm -f "$payload"' EXIT HUP INT TERM
 
-write_payload() {
-  python3 -c 'import json,sys; json.dump({"domains":[sys.argv[1]],"upstream":sys.argv[2],"tls":sys.argv[3] == "true"},sys.stdout)' \
-    "$domain" "$upstream" "$1" >"$payload"
-}
-control=("$ROOT_DIR/scripts/gatewayctl" "--$GATEWAY_TARGET" --config "$GATEWAY_RUNTIME_CONFIG_FILE")
-write_payload false
-"${control[@]}" apply "$route_id" "$payload"
+candidate="$(mktemp)"
+trap 'rm -f -- "$candidate"' EXIT HUP INT TERM
+exec 9>"$GATEWAY_ROUTES_DIR/.routes.lock"
+flock 9
+route_path="$GATEWAY_ROUTES_DIR/$route_id.conf"
+route_exists=false
+if [[ -e "$route_path" || -L "$route_path" ]]; then
+  [[ -f "$route_path" && ! -L "$route_path" ]] || {
+    echo '[gateway] Existing route must be a regular non-symlink file.' >&2
+    exit 1
+  }
+  grep -Fqx "    server_name $domain;" "$route_path" || {
+    echo '[gateway] This route ID already owns another domain; use a new ID.' >&2
+    exit 1
+  }
+  route_exists=true
+fi
+for existing in "$GATEWAY_ROUTES_DIR"/*.conf; do
+  [[ -f "$existing" ]] || continue
+  [[ "$(basename "$existing")" == "$route_id.conf" ]] && continue
+  if grep -Fqx "    server_name $domain;" "$existing"; then
+    echo "[gateway] Domain is already owned by $(basename "$existing" .conf)." >&2
+    exit 1
+  fi
+done
 
-certbot_args=(certonly --webroot -w /var/www/acme --non-interactive --agree-tos --no-eff-email --email "$LETSENCRYPT_EMAIL" -d "$domain")
+if [[ "$route_exists" == false ]]; then
+  gateway_render_route "$candidate" "$route_id" "$domain" "$alias" "$port" false
+  gateway_apply_route_file "$candidate" "$route_id"
+fi
+
+certbot_args=(certonly --webroot -w /var/www/acme --non-interactive --agree-tos \
+  --no-eff-email --email "$LETSENCRYPT_EMAIL" --cert-name "$route_id" -d "$domain")
 [[ -z "${GATEWAY_ACME_SERVER:-}" ]] || certbot_args+=(--server "$GATEWAY_ACME_SERVER")
-docker compose --project-directory "$ROOT_DIR" --env-file "$GATEWAY_RUNTIME_CONFIG_FILE" run --rm certbot "${certbot_args[@]}"
+gateway_compose run --rm certbot "${certbot_args[@]}"
 
-write_payload true
-"${control[@]}" apply "$route_id" "$payload"
-printf '\n[gateway:%s] Connected https://%s to %s\n' "$GATEWAY_TARGET" "$domain" "$upstream"
+gateway_render_route "$candidate" "$route_id" "$domain" "$alias" "$port" true
+gateway_apply_route_file "$candidate" "$route_id"
+printf '\n[gateway:%s] Connected https://%s to %s:%s\n' "$GATEWAY_TARGET" "$domain" "$alias" "$port"

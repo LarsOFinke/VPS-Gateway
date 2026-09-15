@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/lib/target.sh"
+gateway_select_runtime_target "$ROOT_DIR" "$@"
+gateway_strip_target_arguments "$@"
+((${#GATEWAY_REMAINING_ARGS[@]} == 0)) || { echo "usage: $0 [--test|--production]" >&2; exit 2; }
+gateway_load_runtime_config "$ROOT_DIR" "$GATEWAY_RUNTIME_CONFIG_FILE" "$GATEWAY_TARGET"
+
+found=false
+for route in "$GATEWAY_ROUTES_DIR"/*.conf; do
+  [[ -f "$route" ]] || continue
+  found=true
+  sed -n '1s/^# Managed by VPS-Gateway: //p' "$route"
+done
+[[ "$found" == true ]] || echo '[gateway] No routes configured.'

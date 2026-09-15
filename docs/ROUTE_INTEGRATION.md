@@ -1,71 +1,60 @@
-# Upstream integration contract
+# Route integration
 
-Each upstream gateway joins the selected target's ingress network, listens on
-its internal HTTP port, and has no host `ports` entry. The central gateway is the
-only public listener. Production uses `vps-ingress`; test uses
-`vps-ingress-test` by default. The network is Docker-internal, isolating the
-application path from external routing. Route upstreams must name a single
-DNS-compatible alias on this network; IP addresses and dotted hostnames are
-rejected. A separate project-local edge network carries published traffic and
-Certbot connectivity.
+## Attach one application service
 
-## Compose pattern
+Add the selected frontend or application gateway to its existing Compose file.
+Keep all current private networks; add only the shared ingress attachment:
 
 ```yaml
 services:
-  gateway:
+  web:
+    # No public `ports:` entry in production.
     expose:
       - "8080"
     networks:
       default: {}
-      ingress:
+      vps_ingress:
         aliases:
-          - app-gateway
+          - storefront-web
 
 networks:
-  ingress:
-    name: vps-ingress
+  vps_ingress:
     external: true
+    name: vps-ingress
 ```
 
-Do not attach databases or backend-only services to `vps-ingress`. The upstream
-gateway should remain the only entry point for its private service network.
-Do not manually replace the ingress network with a non-internal network;
-`scripts/setup` checks this property before starting the gateway.
+Use `vps-ingress-test` and a different alias for a test deployment. Aliases must
+be unique across all projects on that network. Do not attach databases, queues,
+or private APIs. The selected service must listen on `0.0.0.0` inside its
+container; `127.0.0.1` is not reachable from NGINX.
 
-## Downstream NGINX headers
+## Connect the hostname
 
-The upstream gateway receives authoritative forwarding headers from the
-central gateway. For a dedicated listener reachable only on `vps-ingress`, use:
+Point the domain's A/AAAA records at the VPS, confirm ports 80/443 reach this
+gateway, then run:
 
-```nginx
-proxy_set_header Host $host;
-proxy_set_header X-Real-IP $http_x_real_ip;
-proxy_set_header X-Forwarded-For $http_x_forwarded_for;
-proxy_set_header X-Forwarded-Host $http_x_forwarded_host;
-proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
-proxy_set_header X-Forwarded-Port $http_x_forwarded_port;
+```bash
+./scripts/connect-route --production ROUTE_ID DOMAIN NETWORK_ALIAS CONTAINER_PORT
 ```
 
-Never use that preservation policy on a publicly reachable listener: an
-internet client could forge the headers. Prefer a separate behind-ingress mode
-or server block and restrict it to the Docker network.
+Example:
 
-Application frameworks should use their native forwarded-header handling and
-restrict allowed hosts/origins to the route's public hostname. Browser cookies
-should be host-only and Secure in production.
+```bash
+./scripts/connect-route --production storefront storefront.example.org storefront-web 8080
+```
 
-## Deployment ordering
+Route IDs, domains, and aliases are lowercase. One route owns one hostname and
+one Certbot certificate name. Reuse the route ID to update its upstream.
 
-1. Create the selected network with `scripts/setup` (test) or
-   `scripts/setup --production`.
-2. Deploy the upstream's behind-ingress listener and network alias.
-3. Check reachability from the central gateway container.
-4. Ensure public DNS points to the VPS.
-5. Run `scripts/connect-route --test ...` and only then the explicitly selected
-   production command.
-6. Verify HTTPS, redirects, API calls, source address logging, and WebSockets.
+Applications should allow the public hostname and enable their framework's
+trusted-proxy support only for traffic from the ingress listener. Secure cookies
+and absolute redirects should use the forwarded HTTPS scheme.
 
-For an existing live hostname, import or obtain its certificate before the
-port-80/443 cutover and use a maintenance window. Do not start two gateways that
-both publish those host ports.
+## Safe ordering
+
+1. Set up VPS-Gateway and the shared network.
+2. Deploy the application's ingress attachment without public host ports.
+3. Verify the alias and container port from the gateway network.
+4. Point DNS to the VPS.
+5. Rehearse through test, then explicitly connect production.
+6. Verify HTTP redirect, HTTPS, API calls, uploads, and WebSockets.

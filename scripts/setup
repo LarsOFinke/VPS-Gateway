@@ -12,27 +12,18 @@ config_file="$GATEWAY_RUNTIME_CONFIG_FILE"
 template="$ROOT_DIR/infrastructure/.env.$target.example"
 if [[ ! -e "$config_file" ]]; then
   install -m 0600 "$template" "$config_file"
-  token="$(openssl rand -hex 32)"
-  sed -i "s/replace-with-a-long-random-token/$token/" "$config_file"
   echo "[gateway:$target] Created $config_file; review LETSENCRYPT_EMAIL before certificate enrollment."
 fi
 [[ -f "$config_file" && ! -L "$config_file" && "$(stat -c '%a:%u' "$config_file")" == "600:$(id -u)" ]] || {
   echo "[gateway:$target] Runtime configuration must be a mode-600 regular file owned by this user: $config_file" >&2
   exit 1
 }
-if ! grep -q '^GATEWAY_ADMIN_PASSWORD_HASH=' "$config_file" || \
-    grep -qx 'GATEWAY_ADMIN_PASSWORD_HASH=replace-with-generated-admin-password-hash' "$config_file"; then
-  admin_password="$(openssl rand -base64 24 | tr -d '\n')"
-  admin_hash="$(printf '%s' "$admin_password" | PYTHONPATH="$ROOT_DIR/src" python3 -m vps_gateway.auth hash)"
-  if grep -q '^GATEWAY_ADMIN_PASSWORD_HASH=' "$config_file"; then
-    sed -i "s|^GATEWAY_ADMIN_PASSWORD_HASH=.*|GATEWAY_ADMIN_PASSWORD_HASH=$admin_hash|" "$config_file"
-  else
-    printf 'GATEWAY_ADMIN_PASSWORD_HASH=%s\n' "$admin_hash" >>"$config_file"
-  fi
-  printf '\n[gateway:%s] One-time admin password: %s\n' "$target" "$admin_password"
-  echo "[gateway:$target] Store it securely and change it immediately in the admin panel. It will not be shown again."
+if ! grep -q '^GATEWAY_ROUTES_DIR=' "$config_file"; then
+  printf 'GATEWAY_ROUTES_DIR=%s\n' "$ROOT_DIR/.runtime/$target/routes" >>"$config_file"
 fi
 gateway_load_runtime_config "$ROOT_DIR" "$config_file" "$target"
+[[ ! -L "$GATEWAY_ROUTES_DIR" ]] || { echo "[gateway:$target] Route directory may not be a symlink." >&2; exit 1; }
+install -d -m 0755 "$GATEWAY_ROUTES_DIR"
 docker network inspect "$GATEWAY_INGRESS_NETWORK" >/dev/null 2>&1 || \
   docker network create --driver bridge --internal "$GATEWAY_INGRESS_NETWORK" >/dev/null
 network_internal="$(docker network inspect --format '{{.Internal}}' "$GATEWAY_INGRESS_NETWORK")"
@@ -41,6 +32,7 @@ network_internal="$(docker network inspect --format '{{.Internal}}' "$GATEWAY_IN
   echo "[gateway:$target] Recreate the unused network with: docker network create --driver bridge --internal $GATEWAY_INGRESS_NETWORK" >&2
   exit 1
 }
-docker compose --project-directory "$ROOT_DIR" --env-file "$config_file" up -d --build gateway
-docker compose --project-directory "$ROOT_DIR" --env-file "$config_file" exec -T gateway python -m vps_gateway.healthcheck
-echo "[gateway:$target] Gateway is healthy (HTTP $GATEWAY_HTTP_PORT, HTTPS $GATEWAY_HTTPS_PORT, API loopback $GATEWAY_API_PORT)."
+docker compose --project-directory "$ROOT_DIR" --env-file "$config_file" up -d --build \
+  --wait --wait-timeout 30 gateway
+docker compose --project-directory "$ROOT_DIR" --env-file "$config_file" exec -T gateway nginx -t -c /etc/nginx/nginx.conf
+echo "[gateway:$target] Gateway is healthy (HTTP $GATEWAY_HTTP_PORT, HTTPS $GATEWAY_HTTPS_PORT)."

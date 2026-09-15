@@ -20,18 +20,11 @@ PY
 )"
 temporary="$(mktemp -d)"
 cp "$ROOT_DIR/VERSION" "$temporary/VERSION"
-cp "$ROOT_DIR/src/vps_gateway/__init__.py" "$temporary/__init__.py"
-cp "$ROOT_DIR/openapi.yaml" "$temporary/openapi.yaml"
 rollback() {
   cp "$temporary/VERSION" "$ROOT_DIR/VERSION"
-  cp "$temporary/__init__.py" "$ROOT_DIR/src/vps_gateway/__init__.py"
-  cp "$temporary/openapi.yaml" "$ROOT_DIR/openapi.yaml"
 }
 trap 'rollback; rm -rf -- "$temporary"' ERR
 printf '%s\n' "$next" >"$ROOT_DIR/VERSION"
-sed -i "s/__version__ = \"$current\"/__version__ = \"$next\"/" "$ROOT_DIR/src/vps_gateway/__init__.py"
-sed -i "0,/^  version: $current$/s//  version: $next/" "$ROOT_DIR/openapi.yaml"
-(cd "$ROOT_DIR" && PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m unittest discover -s tests -p test_version.py >/dev/null)
 trap - ERR
 rm -rf -- "$temporary"
 echo "Version updated: $current -> $next"

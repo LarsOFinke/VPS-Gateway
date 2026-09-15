@@ -41,11 +41,17 @@ mv "$staging" "$release"
 runtime_env="$shared/.env"
 if [[ ! -f "$runtime_env" ]]; then
   install -m 0600 "$release/infrastructure/.env.$target.example" "$runtime_env"
-  token="$(openssl rand -hex 32)"
-  sed -i "s/replace-with-a-long-random-token/$token/" "$runtime_env"
+  install -d -m 0755 "$shared/routes"
+  sed -i "s|^GATEWAY_ROUTES_DIR=.*|GATEWAY_ROUTES_DIR=$shared/routes|" "$runtime_env"
   echo "[release:$target] Initialized $runtime_env. Review it on the target, then rerun deployment." >&2
   rm -rf -- "$release"
   exit 3
+fi
+install -d -m 0755 "$shared/routes"
+if ! grep -q '^GATEWAY_ROUTES_DIR=' "$runtime_env"; then
+  printf 'GATEWAY_ROUTES_DIR=%s\n' "$shared/routes" >>"$runtime_env"
+elif grep -q '^GATEWAY_ROUTES_DIR=\./' "$runtime_env"; then
+  sed -i "s|^GATEWAY_ROUTES_DIR=.*|GATEWAY_ROUTES_DIR=$shared/routes|" "$runtime_env"
 fi
 [[ "$(stat -c '%a' "$runtime_env")" == 600 ]] || { echo '[release] shared/.env must have mode 600.' >&2; exit 1; }
 grep -qx "GATEWAY_ENVIRONMENT=$target" "$runtime_env" || {

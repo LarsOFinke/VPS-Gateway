@@ -1,19 +1,11 @@
-FROM python:3.13-alpine
+FROM nginx:1.28.0-alpine
 
-RUN apk add --no-cache nginx openssl \
-    && addgroup -S gateway \
-    && adduser -S -G gateway -h /nonexistent gateway \
-    && mkdir -p /etc/vps-gateway /var/lib/vps-gateway /var/www/acme /tmp/nginx \
-    && chown -R gateway:gateway /tmp/nginx /var/lib/nginx
+RUN apk add --no-cache openssl \
+    && mkdir -p /var/www/acme /var/lib/vps-gateway /tmp/nginx/client_body \
+        /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi
 
-WORKDIR /opt/vps-gateway
-COPY src ./src
 COPY config/nginx.conf /etc/nginx/nginx.conf
 COPY scripts/entrypoint.sh /usr/local/bin/vps-gateway-entrypoint
 
-ENV PYTHONPATH=/opt/vps-gateway/src \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-EXPOSE 8080 8443 9080
+EXPOSE 8080 8443
 ENTRYPOINT ["/usr/local/bin/vps-gateway-entrypoint"]

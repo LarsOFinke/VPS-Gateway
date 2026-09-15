@@ -52,14 +52,13 @@ gateway_load_runtime_config() {
     echo "[gateway] Profile environment '${GATEWAY_ENVIRONMENT:-unset}' does not match target '$expected_target'." >&2
     return 1
   }
-  [[ "${GATEWAY_API_TOKEN:-}" != replace-* && ${#GATEWAY_API_TOKEN} -ge 32 ]] || {
-    echo '[gateway] GATEWAY_API_TOKEN must contain at least 32 non-placeholder characters.' >&2
+  if [[ "${GATEWAY_ROUTES_DIR:-}" == "./.runtime/$expected_target/routes" ]]; then
+    GATEWAY_ROUTES_DIR="$root_dir/.runtime/$expected_target/routes"
+    export GATEWAY_ROUTES_DIR
+  elif [[ "${GATEWAY_ROUTES_DIR:-}" != /* || "$GATEWAY_ROUTES_DIR" == / ]]; then
+    echo '[gateway] GATEWAY_ROUTES_DIR must be the target default or a non-root absolute path.' >&2
     return 1
-  }
-  [[ "${GATEWAY_ADMIN_PASSWORD_HASH:-}" == pbkdf2_sha256:* ]] || {
-    echo '[gateway] GATEWAY_ADMIN_PASSWORD_HASH is missing or invalid.' >&2
-    return 1
-  }
+  fi
   GATEWAY_ROOT_DIR="$root_dir"
   export GATEWAY_ROOT_DIR
 }

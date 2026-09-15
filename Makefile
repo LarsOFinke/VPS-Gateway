@@ -3,12 +3,12 @@
 PYTHON ?= python3
 
 test:
-	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src $(PYTHON) -m unittest discover -s tests -p 'test_*.py' -v
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_*.py' -v
 
 infrastructure-test:
 	bash tests/test_target_selection.sh
 	bash tests/test_setup_network.sh
-	bash tests/test_setup_admin.sh
+	bash tests/test_routes.sh
 	bash tests/test_release_artifact.sh
 	bash tests/test_version_script.sh
 

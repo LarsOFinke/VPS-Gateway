@@ -12,12 +12,10 @@ config="$temporary/.env.test"
 printf '%s\n' \
   'GATEWAY_ENVIRONMENT=test' \
   'COMPOSE_PROJECT_NAME=vps-gateway-test' \
-  'GATEWAY_API_TOKEN=0123456789abcdef0123456789abcdef' \
-  'GATEWAY_ADMIN_PASSWORD_HASH=pbkdf2_sha256:test' \
-  'GATEWAY_API_PORT=19080' \
   'GATEWAY_HTTP_PORT=18080' \
   'GATEWAY_HTTPS_PORT=18443' \
-  'GATEWAY_INGRESS_NETWORK=vps-ingress-test' >"$config"
+  'GATEWAY_INGRESS_NETWORK=vps-ingress-test' \
+  "GATEWAY_ROUTES_DIR=$temporary/routes" >"$config"
 chmod 0600 "$config"
 
 cp "$ROOT_DIR/tests/fixtures/fake-docker.sh" "$temporary/bin/docker"
@@ -39,5 +37,6 @@ fi
 export FAKE_NETWORK_EXISTS=false FAKE_NETWORK_INTERNAL=true
 "$temporary/scripts/setup" --test --config "$config" >/dev/null
 grep -q '^network create --driver bridge --internal vps-ingress-test$' "$FAKE_DOCKER_LOG"
-grep -q '^compose .* up -d --build gateway$' "$FAKE_DOCKER_LOG"
+grep -q '^compose .* up -d --build --wait --wait-timeout 30 gateway$' "$FAKE_DOCKER_LOG"
+[[ -d "$temporary/routes" ]]
 echo 'setup network: OK'

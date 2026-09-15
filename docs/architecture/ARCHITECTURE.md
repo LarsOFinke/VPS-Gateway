@@ -1,64 +1,42 @@
 # Architecture
 
-## Runtime topology
+## Responsibilities
 
-```text
-DNS name A/AAAA
-      |
-      v
-host :80/:443
-      |
-project-local edge network
-      |
-VPS Gateway NGINX ---- loopback management API ---- route state JSON
-      |
-target-specific external, Docker-internal ingress network
-      |
-upstream gateway -> private service runtime/storage
-```
+VPS-Gateway owns only public ingress: ports 80/443, hostname selection,
+forwarding-header normalization, ACME challenges, and public certificates. It
+does not deploy applications, inspect Docker, or understand their internals.
 
-DNS selects the VPS address; TLS SNI and HTTP `Host` select the route. A
-project-local edge network supports published ports and Certbot connectivity.
-The central gateway terminates TLS once and forwards application traffic only
-across the Docker-internal ingress network. Upstream declarations accept a single
-DNS-compatible network alias, not IP addresses or external DNS names. Upstream
-databases and backend-only services never join that shared network.
+NGINX is the only long-running process. Routes are individual `.conf` files in a
+persistent bind-mounted directory. Operator scripts validate constrained values,
+render a candidate, run `nginx -t`, reload without dropping connections, and
+restore the previous file if activation fails.
 
-## Data plane
+## Container isolation
 
-`config/nginx.conf` defines closed default listeners, JSON access logging,
-Docker DNS resolution, timeouts, and protocol maps. `nginx.py` deterministically
-renders enabled routes. It overwrites all client forwarding headers at the
-public trust boundary. Unknown HTTP hosts close with 444; unknown TLS hosts get
-421 after the fallback TLS handshake.
+The target has one external Docker network (`vps-ingress` in production). It is
+created with `--internal`, so it provides container-to-container connectivity but
+no route to the internet. VPS-Gateway also joins its own edge network for public
+ports and Certbot connectivity.
 
-## Control plane
+An application keeps its default/private networks and attaches only its chosen
+HTTP gateway to the shared network. A unique alias such as `storefront-web`
+becomes the upstream address. Databases and backend services never join the
+shared network. Applications do not publish 80/443 on the host.
 
-The standard-library Python API is intentionally small and dependency-free. It
-binds inside the container to port 9080, which Compose exposes only at host
-`127.0.0.1`. Automation uses constant-time bearer-token authentication. The
-browser panel uses an HttpOnly SameSite session cookie and CSRF token; its
-PBKDF2-hashed password persists in the state volume. Bootstrap credentials must
-be rotated before the session can manage routes. It has no Docker socket and
-executes only fixed NGINX, certificate, and bounded upstream-check operations.
+NGINX uses Docker's embedded resolver and a variable `proxy_pass`, so it can
+start or reload while an application is absent and follows container address
+changes automatically.
 
-A mutation is serialized under a process lock, validates every route and
-domain conflict, renders the complete candidate, persists desired state
-atomically, tests NGINX, installs and reloads it, and restores both state and
-configuration if activation fails. Startup always rebuilds generated config from
-persistent state.
+## Hostname and trust handling
 
-TLS route activation checks that the certificate is unexpired and covers every
-declared hostname before NGINX verifies the matching private key and complete
-configuration.
+DNS for many domains may resolve to the same IPv4 and IPv6. TLS SNI selects the
+certificate/server block; HTTP `Host` selects the route. Unknown HTTP hosts close
+with 444 and unknown TLS hosts receive 421 from a fallback certificate.
 
-Disabled routes remain rendered and retain domain ownership. Their HTTP and,
-when configured, HTTPS server blocks return a repository-owned 503 maintenance
-page rather than proxying or falling through to the unknown-host server.
+The public gateway overwrites `X-Real-IP` and all `X-Forwarded-*` headers.
+Applications may trust those values only on the listener reachable through the
+internal ingress network. Public application listeners must not preserve
+client-supplied forwarding headers.
 
-## Environment isolation
-
-Target selection changes the Compose project, host ports, management port,
-ingress network, ACME directory, install root, and private profiles. Test is the
-default; production is never derived implicitly. This permits separate servers
-and also prevents collisions if both environments temporarily share one host.
+No Docker socket is mounted. Route scripts operate through narrowly scoped
+Compose commands rather than a privileged daemon.

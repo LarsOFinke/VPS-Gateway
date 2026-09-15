@@ -2,13 +2,11 @@
 
 | Topic | Document |
 | --- | --- |
-| Runtime design and trust boundaries | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) |
-| Test/production installation and releases | [deployment/DEPLOYMENT.md](deployment/DEPLOYMENT.md) |
+| Runtime design and isolation | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) |
+| Test/production deployment | [deployment/DEPLOYMENT.md](deployment/DEPLOYMENT.md) |
 | Routine operations and recovery | [deployment/OPERATIONS.md](deployment/OPERATIONS.md) |
-| Upstream route integration | [ROUTE_INTEGRATION.md](ROUTE_INTEGRATION.md) |
+| Application integration | [ROUTE_INTEGRATION.md](ROUTE_INTEGRATION.md) |
 | Binding engineering rules | [development/QUALITY_STANDARDS.md](development/QUALITY_STANDARDS.md) |
-| Test strategy and commands | [development/TESTING.md](development/TESTING.md) |
-| Management API | [`../openapi.yaml`](../openapi.yaml) |
+| Test strategy | [development/TESTING.md](development/TESTING.md) |
 
-Agent navigation caches live under `.agents/`; they point to these primary
-documents and must not become a competing source of operational truth.
+`.agents/` contains navigation caches, not a competing source of truth.

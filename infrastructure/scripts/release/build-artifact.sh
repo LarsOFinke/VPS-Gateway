@@ -8,7 +8,7 @@ version="$(<"$ROOT_DIR/VERSION")"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo '[release] VERSION must be SemVer.' >&2; exit 1; }
 mkdir -p "$output_dir"
 artifact="$output_dir/vps-gateway-$version.tar.gz"
-files=(.dockerignore AGENTS.md Dockerfile README.md VERSION compose.yml openapi.yaml config deploy docs infrastructure scripts src)
+files=(.dockerignore AGENTS.md Dockerfile README.md VERSION compose.yml config deploy docs infrastructure scripts)
 tar --create --gzip --file "$artifact" --directory "$ROOT_DIR" \
   --exclude='__pycache__' --exclude='*.pyc' "${files[@]}"
 sha256sum "$artifact" >"$artifact.sha256"
